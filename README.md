@@ -5,6 +5,8 @@ To import this module in your scripts you can run:
 (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/BTIT-MSP/LabTech-Powershell-Module/master/LabTech.psm1') | iex
 ```
 
+This is also useful for deploying Automate via Intune or other combination of methods without needing to have the .EXE / MSI etc. 
+
 # Functions
 
 
