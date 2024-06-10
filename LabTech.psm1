@@ -37,6 +37,9 @@
 
     Update Date: 9/9/2020
     Purpose/Change: Update to support 64-bit OS without SYSNATIVE redirection (ARM64)
+
+    Update Date: 6/9/2024
+    Purpose/Change: Modify the script to support PowerShell 7 by handling SSL ignore certs differently. Note: I kept the ignore SSL certs because it's possible a new PC may not have correct time synced, and thus an SSL cert error may happen.
 #>
 
 If (-not ($PSVersionTable)) {Write-Warning 'PS1 Detected. PowerShell Version 2.0 or higher is required.';return}
@@ -86,26 +89,39 @@ public static extern bool Wow64RevertWow64FsRedirection(ref IntPtr ptr);
     Exit $ExitResult
 }#End If
 
-#Ignore SSL errors
-If ($Null -eq ([System.Management.Automation.PSTypeName]'TrustAllCertsPolicy').Type) {
-    Add-Type -Debug:$False @"
-        using System.Net;
-        using System.Security.Cryptography.X509Certificates;
-        public class TrustAllCertsPolicy : ICertificatePolicy {
-            public bool CheckValidationResult(
-                ServicePoint srvPoint, X509Certificate certificate,
-                WebRequest request, int certificateProblem) {
-                return true;
-            }
-        }
+# Function to ignore SSL errors - updated by cdavis on 6/9/2024
+function Ignore-SSLErrors {
+    if ($PSVersionTable.PSVersion.Major -ge 6) {
+        # For PowerShell 6 and above (including PowerShell 7)
+        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+    } else {
+        # For Windows PowerShell 5.1 and below
+        if ($Null -eq ([System.Management.Automation.PSTypeName]'TrustAllCertsPolicy').Type) {
+            Add-Type -Debug:$False @"
+                using System.Net;
+                using System.Security.Cryptography.X509Certificates;
+                public class TrustAllCertsPolicy : ICertificatePolicy {
+                    public bool CheckValidationResult(
+                        ServicePoint srvPoint, X509Certificate certificate,
+                        WebRequest request, int certificateProblem) {
+                        return true;
+                    }
+                }
 "@
+        }
+        [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
+    }
 }
-[System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
-#Enable TLS, TLS1.1, TLS1.2, TLS1.3 in this session if they are available
+
+# Call the function to ignore SSL errors
+Ignore-SSLErrors
+
+# Enable TLS, TLS1.1, TLS1.2, TLS1.3 in this session if they are available
 IF([Net.SecurityProtocolType]::Tls) {[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls}
 IF([Net.SecurityProtocolType]::Tls11) {[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls11}
 IF([Net.SecurityProtocolType]::Tls12) {[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12}
 IF([Net.SecurityProtocolType]::Tls13) {[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls13}
+
 
 #region [Functions]-------------------------------------------------------------
 
